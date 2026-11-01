@@ -123,6 +123,7 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 const $=id=>document.getElementById(id);
 let pending=null, providers={}, authConfig={}, appInitialized=false;
 const sessionKey='stattutor_session';
+let refreshPromise=null;
 function savedSession(){
   let raw=localStorage.getItem(sessionKey);
   if(!raw){raw=sessionStorage.getItem(sessionKey);if(raw){localStorage.setItem(sessionKey,raw);sessionStorage.removeItem(sessionKey)}}
@@ -132,6 +133,18 @@ function savedSession(){
 }
 function saveSession(value){localStorage.setItem(sessionKey,JSON.stringify(value));sessionStorage.removeItem(sessionKey)}
 function clearSession(){localStorage.removeItem(sessionKey);sessionStorage.removeItem(sessionKey)}
+async function refreshSession(session){
+  if(!refreshPromise){
+    refreshPromise=(async()=>{
+      try{
+        const response=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});
+        if(!response.ok)return{ok:false,status:response.status};
+        const renewed=await response.json();saveSession(renewed);return{ok:true};
+      }catch(e){return{ok:false,status:0}}
+    })().finally(()=>{refreshPromise=null});
+  }
+  return refreshPromise;
+}
 function restoreAuthCallback(){
   const params=new URLSearchParams(location.hash.slice(1));
   const error=params.get('error_description')||params.get('error');
@@ -151,12 +164,12 @@ async function api(path,opt={},allowRefresh=true){
   catch(e){return{ok:false,status:0,j:{detail:'Could not reach StatTutor. Check your connection and try again.'}}}
   let j={};try{j=await r.json()}catch(e){}
   if(r.status===401&&allowRefresh&&authConfig.auth_enabled&&path!=='/api/auth/refresh'){
+    const current=savedSession();
+    if(current?.access_token&&current.access_token!==session?.access_token)return api(path,opt,false);
     if(session?.refresh_token){
-      let rr;
-      try{rr=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})})}
-      catch(e){return{ok:false,status:0,j:{detail:'Could not refresh your session because StatTutor is temporarily unreachable. Your saved sign-in is kept; try again shortly.'}}}
-      if(rr.ok){const renewed=await rr.json();saveSession(renewed);return api(path,opt,false)}
-      if(rr.status>=500||rr.status===429)return{ok:false,status:rr.status,j:{detail:'Supabase is temporarily unavailable. Your saved sign-in is kept; try again shortly.'}}
+      const renewed=await refreshSession(session);
+      if(renewed.ok)return api(path,opt,false);
+      if(renewed.status===0||renewed.status>=500||renewed.status===429)return{ok:false,status:renewed.status,j:{detail:'Supabase is temporarily unavailable. Your saved sign-in is kept; try again shortly.'}}
     }
     clearSession();appInitialized=false;showAuth('Your session expired. Please sign in again.')
   }
