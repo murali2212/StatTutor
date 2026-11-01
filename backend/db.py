@@ -13,20 +13,22 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", "")
 APP_ENCRYPTION_KEY = os.environ.get("APP_ENCRYPTION_KEY", "")
-SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_ANON_KEY and SUPABASE_DB_URL)
-CONFIGURED_VALUES = (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_DB_URL)
-
-if any(CONFIGURED_VALUES) and not SUPABASE_ENABLED:
-    raise RuntimeError(
-        "Supabase requires SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_DB_URL."
-    )
-if SUPABASE_ENABLED and not APP_ENCRYPTION_KEY:
-    raise RuntimeError("Supabase deployments also require APP_ENCRYPTION_KEY.")
-if os.environ.get("VERCEL") == "1" and not SUPABASE_ENABLED:
-    raise RuntimeError(
-        "Vercel requires Supabase. Configure SUPABASE_URL, SUPABASE_ANON_KEY, "
-        "SUPABASE_DB_URL, and APP_ENCRYPTION_KEY."
-    )
+IS_VERCEL = os.environ.get("VERCEL") == "1"
+REQUIRED_SUPABASE_SETTINGS = (
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_DB_URL",
+    "APP_ENCRYPTION_KEY",
+)
+SUPABASE_ENABLED = all(
+    (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_DB_URL, APP_ENCRYPTION_KEY)
+)
+MISSING_SUPABASE_SETTINGS = tuple(
+    name for name, value in zip(
+        REQUIRED_SUPABASE_SETTINGS,
+        (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_DB_URL, APP_ENCRYPTION_KEY),
+    ) if not value
+)
 
 _user_id = contextvars.ContextVar("stattutor_user_id", default=None)
 _initialized_users = set()

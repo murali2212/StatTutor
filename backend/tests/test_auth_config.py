@@ -20,6 +20,8 @@ def test_local_auth_configuration_is_disabled():
     assert response.status_code == 200
     assert response.json() == {
         "auth_enabled": False,
+        "deployment_ready": True,
+        "missing_settings": [],
         "supabase_url": None,
         "supabase_anon_key": None,
     }
@@ -91,3 +93,18 @@ def test_access_token_is_forwarded_to_supabase(monkeypatch):
     user_id = auth.verify_access_token("signed-access-token")
     assert user_id == "b38cb52a-dc29-4581-9c89-bf43f75056a4"
     assert captured["headers"]["Authorization"] == "Bearer signed-access-token"
+
+
+def test_unconfigured_vercel_returns_actionable_setup_response(monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend.main import app
+
+    monkeypatch.setattr(db, "IS_VERCEL", True)
+    monkeypatch.setattr(db, "SUPABASE_ENABLED", False)
+    response = TestClient(app).get("/api/auth/config")
+    assert response.status_code == 200
+    assert response.json()["deployment_ready"] is False
+    assert "SUPABASE_DB_URL" in response.json()["missing_settings"]
+    protected = TestClient(app).get("/api/status")
+    assert protected.status_code == 503
+    assert "redeploy" in protected.json()["detail"]

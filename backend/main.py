@@ -11,7 +11,7 @@ from . import academic, ai, analysis, auth, db, materials, mathengine as me, see
 app = FastAPI(title="StatTutor API", version="0.3.0")
 if db.SUPABASE_ENABLED:
     secret_store.validate_configuration()
-if not db.SUPABASE_ENABLED:
+if not db.SUPABASE_ENABLED and not db.IS_VERCEL:
     db.init()
     seed.seed_if_empty()
     seed.seed_materials()
@@ -22,7 +22,18 @@ app.include_router(materials.router)
 @app.middleware("http")
 async def require_account(request: Request, call_next):
     path = request.url.path
-    if not db.SUPABASE_ENABLED or not path.startswith("/api/") or path.startswith("/api/auth/"):
+    if not path.startswith("/api/"):
+        return await call_next(request)
+    if not db.SUPABASE_ENABLED:
+        if db.IS_VERCEL and path != "/api/auth/config":
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Supabase is not configured in Vercel. Add the required environment variables and redeploy."
+                },
+            )
+        return await call_next(request)
+    if path.startswith("/api/auth/"):
         return await call_next(request)
 
     authorization = request.headers.get("authorization", "")

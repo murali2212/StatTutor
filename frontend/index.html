@@ -369,6 +369,12 @@ $('chkai').onclick=async()=>{const box=$('chkout');box.replaceChildren(el('p','s
 (async()=>{
   const r=await api('/api/auth/config',{},false);
   authConfig=r.j||{};
+  if(!authConfig.deployment_ready){
+    showAuth('Deployment setup incomplete. In Vercel → Project Settings → Environment Variables, add: '+(authConfig.missing_settings||[]).join(', ')+'. Then redeploy.');
+    $('authTitle').textContent='Finish deployment setup';
+    $('authEmail').disabled=true;$('authPassword').disabled=true;$('authLogin').disabled=true;$('authSignup').disabled=true;
+    return;
+  }
   if(!authConfig.auth_enabled){await startApp();return}
   const session=savedSession();
   if(session?.access_token){const check=await api('/api/status');if(check.ok){await startApp();return}clearSession()}

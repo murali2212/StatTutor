@@ -65,6 +65,8 @@ async def refresh(body: dict):
 def config():
     return {
         "auth_enabled": db.SUPABASE_ENABLED,
+        "deployment_ready": not db.IS_VERCEL or db.SUPABASE_ENABLED,
+        "missing_settings": list(db.MISSING_SUPABASE_SETTINGS) if db.IS_VERCEL else [],
         "supabase_url": db.SUPABASE_URL if db.SUPABASE_ENABLED else None,
         "supabase_anon_key": db.SUPABASE_ANON_KEY if db.SUPABASE_ENABLED else None,
     }
