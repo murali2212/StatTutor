@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StatTutor</title>
+<style>
+:root{--bg:#f4f6f3;--card:#fff;--ink:#1b2a2f;--mute:#5d6b70;--line:#d9dfdc;--acc:#1d6b57;--acc2:#e8f1ed;--warn:#fff3d6;--warnl:#e0b84a;--err:#a6362b}
+@media(prefers-color-scheme:dark){:root{--bg:#10181a;--card:#182225;--ink:#e6eeea;--mute:#93a3a0;--line:#2b3a3d;--acc:#4fb597;--acc2:#1c3029;--warn:#3a3118;--warnl:#8a7326;--err:#ff8a7a}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+h1,h2{font-family:Georgia,"Iowan Old Style",serif;margin:0}
+header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:20px}
+main{flex:1;overflow:auto;padding:16px;max-width:760px;width:100%;margin:0 auto}
+nav{display:flex;border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;padding:14px 2px;background:none;border:0;color:var(--mute);font:inherit;font-size:13px;cursor:pointer}
+nav button[aria-selected=true]{color:var(--acc);font-weight:600;box-shadow:inset 0 3px var(--acc)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.panel{display:none}.panel.on{display:block}
+.msg{padding:10px 14px;border-radius:12px;margin:8px 0;white-space:pre-wrap;max-width:92%;overflow-wrap:anywhere}
+.msg.user{background:var(--acc);color:#fff;margin-left:auto}
+.msg.assistant{background:var(--card);border:1px solid var(--line)}
+.row{display:flex;gap:8px;margin-top:12px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
+textarea{resize:vertical}
+label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
+.btn{padding:10px 16px;border:0;border-radius:8px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.btn.ghost{background:none;color:var(--acc);border:1px solid var(--acc)}
+.btn:disabled{opacity:.5}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}
+.banner{background:var(--warn);border:1px solid var(--warnl);border-radius:10px;padding:12px 14px;margin:0 0 12px;display:none}
+.banner.on{display:block}.banner b{display:block;margin-bottom:6px}
+.err{color:var(--err);margin-top:8px}.ok{color:var(--acc);margin-top:8px}
+.keyrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.tag{font-size:13px;padding:2px 8px;border-radius:99px;background:var(--acc2);color:var(--acc)}
+.tag.bad{background:var(--warn);color:var(--err)}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;display:flex;margin:4px 0 10px}.bar i{display:block;height:100%}.bar .n{background:var(--acc)}.bar .t{background:var(--warnl)}.bar .m{background:var(--mute)}
+.q{border-top:1px solid var(--line);padding:10px 0}.q .row{margin-top:6px}.q input[type=number]{width:90px}.lvl{font-size:13px;padding:2px 8px;border-radius:99px;background:var(--acc2);color:var(--acc);white-space:nowrap}.lvl.once{background:var(--warn);color:var(--ink)}.lvl.untested{background:var(--line);color:var(--mute)}
+.src{font-size:13px;color:var(--mute);margin-top:6px}.ok{color:var(--acc)}.bad{color:var(--err)}.hit{border-top:1px solid var(--line);padding:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}.step{margin:6px 0}.tw{overflow-x:auto;margin:8px 0}table{border-collapse:collapse;font-size:14px;min-width:100%}th,td{border:1px solid var(--line);padding:4px 8px;text-align:right;white-space:nowrap}th{background:var(--acc2)}
+.steps li{margin:4px 0}.small{font-size:14px;color:var(--mute)}
+</style></head><body>
+<header><h1>StatTutor</h1><span class="small" id="keystate"></span></header>
+<main>
+<div class="banner" id="banner" role="alert"><b id="bannerTitle"></b><span id="bannerText"></span>
+  <div class="row"><button class="btn" id="bannerBtn">Add new API key</button></div></div>
+
+<section class="panel on" id="p-tutor">
+  <div id="chat"></div>
+  <div class="row"><textarea id="msg" rows="2" placeholder="Ask anything, e.g. Teach me standard deviation from zero. Enter sends, Shift+Enter adds a new line."></textarea></div>
+  <div class="row"><button class="btn" id="send">Send</button></div>
+</section>
+
+<section class="panel" id="p-papers">
+  <h2>Syllabus and papers</h2>
+  <p class="small">Your syllabus and papers are already loaded. You can replace them any time: syllabus first, then the papers. PDF, TXT or MD, or paste the text. Check what the AI read and fix anything wrong.</p>
+  <div id="uploads"></div>
+  <h2 style="margin-top:24px">Check the syllabus</h2><div id="syl"><p class="small">Nothing yet.</p></div>
+  <h2 style="margin-top:24px">Check the questions</h2><div id="qs"><p class="small">Nothing yet.</p></div>
+</section>
+
+<section class="panel" id="p-analysis">
+  <h2>Exam analysis</h2><div id="ana"><p class="small">Loading...</p></div>
+</section>
+
+<section class="panel" id="p-calc">
+  <h2>Calculator</h2><p class="small">Every answer comes with the working explained step by step. The boxes already hold examples from your own papers.</p>
+  <label for="ctype">What do you want to calculate?</label>
+  <select id="ctype"></select><p class="small" id="cnote"></p>
+  <div id="cform"></div>
+  <div class="row"><button class="btn" id="crun">Calculate</button></div>
+  <div id="cout"></div>
+</section>
+
+<section class="panel" id="p-notes">
+  <h2>Study notes</h2>
+  <p class="small">Your syllabus and both papers are already here. Add notes or textbook chapters (PDF, TXT, MD, or paste text) and the tutor will search them and name the source it used.</p>
+  <div class="card"><b>Add material</b>
+    <label for="mtitle">Title (optional)</label><input id="mtitle" placeholder="e.g. Unit 3 notes">
+    <label for="mkind">Type</label><select id="mkind"><option value="notes">My notes</option><option value="textbook">Textbook</option><option value="other">Other</option></select>
+    <label for="mfile">File</label><input id="mfile" type="file" accept=".pdf,.txt,.md">
+    <label for="mtext">Or paste text</label><textarea id="mtext" rows="3"></textarea>
+    <div class="row"><button class="btn" id="madd">Add and index</button></div><div id="mout"></div></div>
+  <div class="card"><b>What the tutor can see</b><div id="mlist"></div></div>
+  <div class="card"><b>Test the search</b><p class="small">Type a topic and see which passages the tutor would get.</p>
+    <div class="row"><input id="mq" placeholder="e.g. quartile deviation" aria-label="Search your materials"><button class="btn" id="msearch">Search</button></div><div id="mres"></div></div>
+</section>
+
+<section class="panel" id="p-set">
+  <h2>API connection</h2>
+  <div class="banner" id="setnote" role="alert"></div>
+  <p class="small">Paste a free key, tap Test and save, and the tutor starts working. Your key stays on this computer.</p>
+  <label for="prov">Provider</label><select id="prov"></select>
+  <p class="small" id="getkey"></p>
+  <label for="model">Model</label><input id="model" autocomplete="off">
+  <label for="key">API key</label><input id="key" type="password" autocomplete="off" placeholder="Paste key here">
+  <div class="row"><button class="btn" id="save">Test and save</button></div>
+  <div id="sout"></div>
+  <div class="card"><b>System check</b><p class="small">Shows whether the syllabus, papers, search, calculator and AI key are all working.</p>
+    <div class="row"><button class="btn" id="chk">Run system check</button><button class="btn ghost" id="chkai">Test the AI now</button></div><div id="chkout"></div></div>
+  <div class="card"><b>Saved keys</b><div id="keys"></div>
+  <p class="small">If a key hits its free limit, the next one is used automatically.</p></div>
+</section>
+</main>
+<nav role="tablist">
+  <button role="tab" data-t="tutor" aria-selected="true">Tutor</button>
+  <button role="tab" data-t="papers" aria-selected="false">Papers</button>
+  <button role="tab" data-t="analysis" aria-selected="false">Exam</button>
+  <button role="tab" data-t="calc" aria-selected="false">Calc</button>
+  <button role="tab" data-t="notes" aria-selected="false">Notes</button>
+  <button role="tab" data-t="set" aria-selected="false">Key</button>
+</nav>
+<script>
+const $=id=>document.getElementById(id);
+let pending=null, providers={};
+async function api(path,opt){const r=await fetch(path,opt);let j={};try{j=await r.json()}catch(e){}return{ok:r.ok,status:r.status,j}}
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+
+function tab(t){document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+t));
+  document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
+  if(t==='set')loadKeys();if(t==='papers')loadReview();if(t==='analysis')loadAnalysis();if(t==='notes')loadMaterials()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
+
+function bubble(role,text,sources){const d=document.createElement('div');d.className='msg '+role;d.textContent=text;
+  if(sources&&sources.length){const s=document.createElement('div');s.className='src';s.textContent='From your materials: '+sources.map(x=>`[S${x.n}] ${x.title}`).join(' · ');d.appendChild(s)}
+  $('chat').appendChild(d);d.scrollIntoView({block:'end'});return d}
+function banner(title,text){$('bannerTitle').textContent=title;$('bannerText').textContent=text;$('banner').classList.add('on')}
+$('bannerBtn').onclick=()=>tab('set');
+
+function apiProblem(r,retry){pending=retry;const c=r.j.code;
+  if(c==='api_exhausted'||c==='no_key'){
+    $('setnote').textContent=c==='no_key'?'There is no API key yet. Please paste an API key here so I can work. Your question will be sent as soon as it is saved.':'Your API limit is over. Paste another API key here and I will continue from where we stopped.';
+    $('setnote').classList.add('on');tab('set')}
+  else banner('Could not reach the AI',String(r.j.detail||'Try again in a moment.'))}
+const apiCodes=['api_exhausted','no_key','provider_error'];
+async function ask(text){
+  $('banner').classList.remove('on');$('send').disabled=true;
+  const wait=bubble('assistant','Thinking...');
+  const r=await post('/api/tutor/chat',{message:text});
+  $('send').disabled=false;wait.remove();
+  if(r.ok){pending=null;bubble('assistant',r.j.reply,r.j.sources);return}
+  apiProblem(r,()=>{tab('tutor');ask(text)});
+}
+$('send').onclick=()=>{const t=$('msg').value.trim();if(!t)return;$('msg').value='';bubble('user',t);ask(t)};
+$('msg').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('send').click()}});
+
+async function loadHistory(){const r=await api('/api/tutor/history');(r.j||[]).forEach(m=>bubble(m.role,m.content,m.sources))}
+async function refreshState(){const r=await api('/api/status');$('keystate').textContent=r.j.active_keys?'Connected':'No active key'}
+
+async function loadKeys(){
+  const r=await api('/api/keys');const box=$('keys');box.innerHTML='';
+  if(!r.j.length){box.innerHTML='<p class="small">No keys yet.</p>'}
+  r.j.forEach(k=>{const row=document.createElement('div');row.className='keyrow';
+    const info=document.createElement('div');info.textContent=`${providers[k.provider]?.label||k.provider} · ${k.key}`;
+    const tg=document.createElement('span');tg.className='tag'+(k.status==='active'?'':' bad');
+    tg.textContent={active:'Working',exhausted:'Limit used up',invalid:'Rejected'}[k.status];info.append(' ',tg);
+    const act=document.createElement('div');
+    if(k.status!=='active'){const b=document.createElement('button');b.className='btn ghost';b.textContent='Try again';
+      b.onclick=async()=>{await api(`/api/keys/${k.id}/reactivate`,{method:'POST'});loadKeys();refreshState()};act.append(b,' ')}
+    const d=document.createElement('button');d.className='btn ghost';d.textContent='Delete';
+    d.onclick=async()=>{await api('/api/keys/'+k.id,{method:'DELETE'});loadKeys();refreshState()};act.append(d);
+    row.append(info,act);box.appendChild(row)});
+}
+function provUI(){const p=providers[$('prov').value];$('model').value=p.default_model;
+  $('getkey').textContent='Get a free key at '+p.get_key}
+$('prov').onchange=provUI;
+$('save').onclick=async()=>{
+  const key=$('key').value.trim();if(!key){$('sout').innerHTML='<p class="err">Paste your API key first.</p>';return}
+  $('save').disabled=true;$('sout').innerHTML='<p class="small">Testing the key...</p>';
+  const r=await post('/api/keys',{provider:$('prov').value,model:$('model').value,api_key:key});
+  $('save').disabled=false;
+  if(!r.ok){$('sout').innerHTML='';const p=document.createElement('p');p.className='err';p.textContent=r.j.detail||'Could not save the key.';$('sout').appendChild(p);return}
+  $('setnote').classList.remove('on');$('key').value='';$('sout').innerHTML='<p class="ok">Connected. Key saved.</p>';loadKeys();refreshState();
+  if(pending){const f=pending;pending=null;f()}
+};
+
+const nums=t=>t.split(/[\s,;]+/).filter(Boolean).map(Number);
+const words=t=>t.split(/[\s,;]+/).filter(Boolean);
+const rows=t=>t.split(/\n/).map(l=>l.trim()).filter(Boolean).map(nums);
+const opt=t=>t.trim()===''?null:Number(t);
+const SIG=[['alpha','Level of significance (0.05 means 5%)','num','0.05']];
+const TV=['table_value','Table value given in the question (leave empty to use the exact table)','optnum',''];
+const CALCS={
+ descriptive:{g:'Averages and spread',label:'Mean, median, mode, SD (a list of numbers)',note:'Type the numbers with spaces or commas.',fields:[['data','Numbers','nums','2 4 4 4 5 5 7 9'],['sample','Data type','select','Sample',['Sample','Population']]],path:'descriptive',build:v=>({data:nums(v.data),sample:v.sample==='Sample'})},
+ sdcv:{g:'Averages and spread',label:'Standard deviation and CV (frequency table)',note:'Example: practical paper, question 1.',fields:[['x','x values','nums','112 113 118 120 125 130'],['f','Frequencies f','nums','12 14 10 16 4 14']],path:'freq',build:v=>({x:nums(v.x),f:nums(v.f),focus:'sd_cv'})},
+ range:{g:'Averages and spread',label:'Range and coefficient of range (frequency table)',note:'Example: CT-2, question 4.',fields:[['x','x values','nums','35 45 18 25 48'],['f','Frequencies f','nums','3 4 5 4 3']],path:'freq',build:v=>({x:nums(v.x),f:nums(v.f),focus:'range'})},
+ qd:{g:'Averages and spread',label:'Quartile deviation and its relative measure',note:'Example: CT-2, question 10(a).',fields:[['x','x values','nums','28 30 40 45 22 20 35 48 50'],['f','Frequencies f','nums','10 5 8 7 6 3 4 7 5']],path:'freq',build:v=>({x:nums(v.x),f:nums(v.f),focus:'qd'})},
+ md:{g:'Averages and spread',label:'Mean deviation and its coefficient',note:'Choose whether to measure from the mean or the median.',fields:[['x','x values','nums','28 30 40 45 22 20 35 48 50'],['f','Frequencies f','nums','10 5 8 7 6 3 4 7 5'],['about','Measure from the','select','mean',['mean','median']]],path:'freq',build:v=>({x:nums(v.x),f:nums(v.f),focus:'md',about:v.about})},
+ skew:{g:'Averages and spread',label:'Karl Pearson skewness (class intervals)',note:'Example: CT-2, question 10(b). The paper says "Above 30", so I used 30-35. Change it if your teacher gave a limit.',fields:[['c','Classes','text','0-5 5-10 10-15 15-20 20-25 25-30 30-35'],['f','Frequencies f','nums','6 5 8 10 7 13 9']],path:'grouped',build:v=>({classes:words(v.c),f:nums(v.f),focus:'skew'})},
+ gsd:{g:'Averages and spread',label:'Standard deviation and CV (class intervals)',note:'Classes must have equal width.',fields:[['c','Classes','text','0-5 5-10 10-15 15-20 20-25 25-30 30-35'],['f','Frequencies f','nums','6 5 8 10 7 13 9']],path:'grouped',build:v=>({classes:words(v.c),f:nums(v.f),focus:'sd_cv'})},
+ reg:{g:'Correlation and regression',label:'Correlation and regression lines (with estimate)',note:'Example: practical paper, question 2. The paper says 8 students but shows 7 pairs, so check the photo. Also try CT-2 Q11(b): x = 2 3 4 5 6 7, y = 40 45 50 55 60 65.',fields:[['x','x values','nums','2 3 4 5 6 7 8'],['y','y values','nums','40 45 55 64 75 80 87'],['e','Estimate Y when X = (optional)','optnum','5.5']],path:'correlation',build:v=>({x:nums(v.x),y:nums(v.y),estimate_x:opt(v.e)})},
+ spear:{g:'Correlation and regression',label:"Spearman's rank correlation",note:'Example: CT-2, question 11(a). Run it again for Judge I with III, then II with III. The pair with the highest value agrees most. Values must not repeat.',fields:[['x','Judge I ranks (or x values)','nums','1 5 4 8 9 6 10 7 3 2'],['y','Judge II ranks (or y values)','nums','4 8 7 6 5 9 10 3 2 1']],path:'spearman',build:v=>({x:nums(v.x),y:nums(v.y)})},
+ t1:{g:'Tests of significance',label:'t-test: one sample mean',note:'Example: practical paper, question 4.',fields:[['data','Sample values','nums','4.7 4.9 5.0 5.1 5.4 5.2 4.6 5.1 4.6 4.7'],['mu0','Claimed mean','num','5'],['alpha','Level of significance','num','0.05'],['tails','Tails','select','2',['2','1']],TV.concat([])],path:'t_single',build:v=>({data:nums(v.data),mu0:+v.mu0,alpha:+v.alpha,tails:+v.tails,table_value:opt(v.table_value)})},
+ t2:{g:'Tests of significance',label:'t-test: two sample means',note:'Example: practical paper, question 3. Pick how the standard deviations were calculated. Note: the paper gives 2.58, but the exact table value for 36 df at 1% is about 2.72. Either way the answer is the same here.',fields:[['n1','Sample 1 size','num','20'],['m1','Sample 1 mean','num','170'],['s1','Sample 1 standard deviation','num','20'],['n2','Sample 2 size','num','18'],['m2','Sample 2 mean','num','205'],['s2','Sample 2 standard deviation','num','25'],['alpha','Level of significance','num','0.01'],['sdt','Standard deviations were divided by','select','n',['n','n-1']],TV.concat([])],path:'t_two',build:v=>({n1:+v.n1,mean1:+v.m1,sd1:+v.s1,n2:+v.n2,mean2:+v.m2,sd2:+v.s2,alpha:+v.alpha,tails:2,sd_type:v.sdt,table_value:opt(v.table_value)})},
+ f:{g:'Tests of significance',label:'F-test: two variances',note:'Example: practical paper, question 5. Check the numbers against your photo.',fields:[['a','Sample I','nums','5 6 8 1 12 4 3 9 6 10'],['b','Sample II','nums','2 3 6 8 1 10 2 8'],['alpha','Level of significance','num','0.05'],TV.concat([])],path:'f_test',build:v=>({data1:nums(v.a),data2:nums(v.b),alpha:+v.alpha,table_value:opt(v.table_value)})},
+ cg:{g:'Tests of significance',label:'Chi-square: goodness of fit',note:'Example: practical paper, question 6. Leave expected empty if all categories are equally likely.',fields:[['o','Observed frequencies','nums','15 18 22 20 25 20'],['e','Expected frequencies (optional)','text',''],['alpha','Level of significance','num','0.05'],TV.concat([])],path:'chi_gof',build:v=>({observed:nums(v.o),expected:v.e.trim()?nums(v.e):null,alpha:+v.alpha,table_value:opt(v.table_value)})},
+ ci:{g:'Tests of significance',label:'Chi-square: independence',note:'One row per line, numbers separated by spaces.',fields:[['t','Table of counts','lines','20 15 30\n10 25 20'],['alpha','Level of significance','num','0.05'],TV.concat([])],path:'chi_ind',build:v=>({table:rows(v.t),alpha:+v.alpha,table_value:opt(v.table_value)})},
+ an:{g:'Tests of significance',label:'One-way ANOVA',note:'One group per line.',fields:[['g','Groups','lines','6 8 4 5\n8 12 9 11\n13 9 11 8'],['alpha','Level of significance','num','0.05'],TV.concat([])],path:'anova',build:v=>({groups:rows(v.g),alpha:+v.alpha,table_value:opt(v.table_value)})},
+ bin:{g:'Probability',label:'Binomial probability',note:'',fields:[['n','Number of trials n','num','10'],['p','Chance of success p','num','0.5'],['k','Number of successes k','num','3']],path:'binomial',build:v=>({n:+v.n,p:+v.p,k:+v.k})},
+ poi:{g:'Probability',label:'Poisson probability',note:'',fields:[['l','Average rate λ','num','2'],['k','Number of events k','num','0']],path:'poisson',build:v=>({lam:+v.l,k:+v.k})},
+ nor:{g:'Probability',label:'Normal distribution',note:'Fill the second x only for a "between" probability.',fields:[['m','Mean','num','0'],['s','Standard deviation','num','1'],['x','x value','num','1.96'],['x2','Second x value (optional)','optnum','']],path:'normal',build:v=>({mean:+v.m,sd:+v.s,x:+v.x,x2:opt(v.x2)})}
+};
+function hasNaN(o){return typeof o==='number'?Number.isNaN(o):Array.isArray(o)?o.some(hasNaN):o&&typeof o==='object'?Object.values(o).some(hasNaN):false}
+function buildSelect(){const sel=$('ctype');let og=null,last='';
+  Object.entries(CALCS).forEach(([k,c])=>{if(c.g!==last){og=document.createElement('optgroup');og.label=c.g;sel.appendChild(og);last=c.g}og.appendChild(new Option(c.label,k))})}
+function drawForm(){const c=CALCS[$('ctype').value];$('cout').replaceChildren();$('cnote').textContent=c.note||'';const box=$('cform');box.replaceChildren();
+  c.fields.forEach(([id,lab,type,def,opts])=>{const l=el('label','',lab);l.htmlFor='c_'+id;let e;
+    if(type==='select'){e=el('select');opts.forEach(o=>e.add(new Option(o)));e.value=def}
+    else if(type==='lines'){e=el('textarea');e.rows=4;e.value=def}
+    else{e=el('input');e.type='text';if(type==='num'||type==='optnum')e.inputMode='decimal';e.value=def}
+    e.id='c_'+id;box.append(l,e)})}
+$('ctype').onchange=drawForm;
+function renderSteps(steps,box){steps.forEach(st=>{const c=el('div','card');c.append(el('b','',st.title));
+  st.lines.forEach(t=>c.append(el('p','step',t)));
+  if(st.table){const w=el('div','tw');const tb=el('table');const hd=el('tr');st.table.head.forEach(h=>hd.append(el('th','',h)));tb.append(hd);
+    st.table.rows.forEach(r=>{const tr=el('tr');r.forEach(x=>tr.append(el('td','',x)));tb.append(tr)});w.append(tb);c.append(w)}
+  box.append(c)})}
+$('crun').onclick=async()=>{const c=CALCS[$('ctype').value];const v={};c.fields.forEach(([id])=>v[id]=$('c_'+id).value);
+  const out=$('cout');out.replaceChildren();let body;
+  try{body=c.build(v)}catch(e){out.append(errP('Check your inputs.'));return}
+  if(hasNaN(body)){out.append(errP('Some entries are not numbers. Check the boxes.'));return}
+  const r=await post('/api/math/'+c.path,body);
+  if(!r.ok){out.append(errP(typeof r.j.detail==='string'?r.j.detail:'Check your inputs.'));return}
+  renderSteps(r.j.steps,out)};
+
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
+function errP(msg){return el('p','err',msg)}
+const KINDS=[['syllabus','Syllabus'],['ct1','CT-1 question paper'],['ct2','CT-2 question paper']];
+function drawUploads(){const box=$('uploads');box.innerHTML='';
+  KINDS.forEach(([kind,title])=>{const c=el('div','card');c.append(el('b','',title));
+    const f=el('input');f.type='file';f.accept='.pdf,.txt,.md';f.setAttribute('aria-label',title+' file');
+    const t=el('textarea');t.rows=3;t.placeholder='Or paste the text here';t.setAttribute('aria-label',title+' text');
+    const st=el('div','small');const b=el('button','btn','Upload and read');b.style.marginTop='8px';
+    b.onclick=async()=>{const fd=new FormData();fd.append('kind',kind);
+      if(f.files[0])fd.append('file',f.files[0]);else if(t.value.trim())fd.append('text',t.value);
+      else{st.replaceChildren(errP('Choose a file or paste the text.'));return}
+      b.disabled=true;st.textContent='Uploading...';
+      const r=await api('/api/documents',{method:'POST',body:fd});
+      if(!r.ok){b.disabled=false;st.replaceChildren(errP(r.j.detail||'Upload failed.'));return}
+      st.textContent=`Got ${r.j.chars} characters from ${r.j.filename}`+(r.j.truncated?' (only the first part is read)':'')+'. Reading with AI...';
+      await extractDoc(r.j.id,st);b.disabled=false};
+    c.append(f,t,b,st);box.appendChild(c)})}
+async function extractDoc(id,st){
+  const r=await api(`/api/documents/${id}/extract`,{method:'POST'});
+  if(r.ok){st.textContent=r.j.units!==undefined?`Found ${r.j.units} units and ${r.j.topics} topics. Check them below.`:`Found ${r.j.questions} questions, ${r.j.matched} matched to topics. Check them below.`;
+    $('banner').classList.remove('on');loadReview();return}
+  if(apiCodes.includes(r.j.code)){st.textContent='Waiting for an API key...';apiProblem(r,()=>{tab('papers');st.textContent='Reading with AI...';extractDoc(id,st)});return}
+  st.replaceChildren(errP(typeof r.j.detail==='string'?r.j.detail:'Could not read this document.'))}
+
+async function loadReview(){
+  const [sy,pp]=await Promise.all([api('/api/syllabus'),api('/api/papers')]);
+  const box=$('syl');box.replaceChildren();
+  if(!sy.j.length)box.append(el('p','small','Nothing yet. Upload your syllabus above.'));
+  const flat=[];sy.j.forEach(u=>u.topics.forEach(t=>flat.push(t)));
+  sy.j.forEach(u=>{const c=el('div','card');const h=el('div','keyrow');h.append(el('b','',u.name));
+    const del=el('button','btn ghost','Delete unit');del.onclick=async()=>{if(confirm('Delete this unit and its topics?')){await api('/api/units/'+u.id,{method:'DELETE'});loadReview()}};h.append(del);c.append(h);
+    u.topics.forEach(t=>{const r=el('div','row');const i=el('input');i.value=t.name;i.setAttribute('aria-label','Topic name');
+      i.onchange=()=>api('/api/topics/'+t.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:i.value})});
+      const d=el('button','btn ghost','Delete');d.onclick=async()=>{await api('/api/topics/'+t.id,{method:'DELETE'});loadReview()};r.append(i,d);c.append(r)});
+    const a=el('div','row');const ni=el('input');ni.placeholder='Add a topic';ni.setAttribute('aria-label','New topic');
+    const ab=el('button','btn','Add');ab.onclick=async()=>{if(!ni.value.trim())return;await post(`/api/units/${u.id}/topics`,{name:ni.value});loadReview()};a.append(ni,ab);c.append(a);box.append(c)});
+  const qb=$('qs');qb.replaceChildren();
+  const all=[['CT-1',pp.j.ct1],['CT-2',pp.j.ct2],['Model practical',pp.j.practical]];
+  if(!pp.j.ct1.length&&!pp.j.ct2.length&&!pp.j.practical.length)qb.append(el('p','small','Nothing yet. Upload CT-1 and CT-2 above.'));
+  all.forEach(([label,list])=>{if(!list.length)return;const c=el('div','card');c.append(el('b','',label));
+    list.forEach(q=>{const d=el('div','q');d.append(el('div','',(q.number?q.number+'. ':'')+q.text+(q.alt?' (OR option: not counted twice in marks)':'')));
+      const r=el('div','row');const m=el('input');m.type='number';m.step='any';m.value=q.marks??'';m.placeholder='Marks';m.setAttribute('aria-label','Marks');
+      const patch=b=>api('/api/questions/'+q.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+      m.onchange=()=>{if(m.value!=='')patch({marks:+m.value})};
+      const ty=el('select');['numerical','theory','definition','mixed'].forEach(o=>ty.add(new Option(o,o,false,o===q.qtype)));ty.setAttribute('aria-label','Question type');ty.onchange=()=>patch({qtype:ty.value});
+      const tp=el('select');tp.add(new Option('Not matched',''));flat.forEach(t=>tp.add(new Option(t.name,t.id,false,t.id===q.topic_id)));tp.setAttribute('aria-label','Topic');
+      tp.onchange=()=>patch({set_topic:true,topic_id:tp.value?+tp.value:null});
+      const x=el('button','btn ghost','Remove');x.onclick=async()=>{await api('/api/questions/'+q.id,{method:'DELETE'});loadReview()};
+      r.append(m,ty,tp,x);d.append(r);c.append(d)});qb.append(c)})}
+
+const LV={repeated:'Asked in 2 or more papers',once:'Asked once',untested:'Not tested yet'};
+async function loadAnalysis(){
+  const r=await api('/api/exam/analysis');const box=$('ana');box.replaceChildren();
+  if(!r.j.ready){box.append(el('p','small','Add your syllabus and papers in the Papers tab. The analysis appears here.'));return}
+  box.append(el('p','small',r.j.disclaimer));
+  [['ct1','CT-1'],['ct2','CT-2'],['practical','Model practical']].forEach(([k,l])=>{const T=r.j.totals[k];if(!T.questions)return;const c=el('div','card');
+    c.append(el('b','',`${l}: ${T.questions} question${T.questions===1?'':'s'}, ${T.max_marks??T.marks} marks`));if(T.note)c.append(el('div','small',T.note));
+    const bar=el('div','bar');[['n','numerical'],['t','theory'],['m','mixed']].forEach(([cl,key])=>{if(T.marks&&T[key]){const i=el('i',cl);i.style.width=(100*T[key]/T.marks)+'%';bar.append(i)}});
+    c.append(bar,el('div','small',`Numerical ${T.numerical} · Theory and definitions ${T.theory} · Mixed ${T.mixed}`));box.append(c)});
+  if(r.j.tips.length){const c=el('div','card');c.append(el('b','','What to focus on, and why'));const ul=el('ul');
+    r.j.tips.forEach(t=>ul.append(el('li','',t.text)));c.append(ul);box.append(c)}
+  const c=el('div','card');c.append(el('b','','Topics, strongest pattern first'));
+  r.j.topics.forEach(t=>{const row=el('div','q');const h=el('div','keyrow');h.append(el('div','',`${t.name}`));h.append(el('span','lvl '+t.level,LV[t.level]));
+    row.append(h,el('div','small',t.evidence));
+    const b=el('button','btn ghost','Teach me this');b.style.marginTop='8px';
+    b.onclick=()=>{tab('tutor');bubble('user',t.teach_prompt);ask(t.teach_prompt)};row.append(b);c.append(row)});
+  box.append(c)}
+
+async function loadMaterials(){const r=await api('/api/materials');const box=$('mlist');box.replaceChildren();
+  if(!r.j.length)box.append(el('p','small','Nothing yet.'));
+  r.j.forEach(m=>{const row=el('div','keyrow');const i=el('div','',`${m.title} · ${m.chunks} passages`);
+    const d=el('button','btn ghost','Delete');d.onclick=async()=>{if(confirm('Remove this material from the tutor?')){await api('/api/materials/'+m.id,{method:'DELETE'});loadMaterials()}};row.append(i,d);box.append(row)})}
+$('madd').onclick=async()=>{const fd=new FormData();fd.append('title',$('mtitle').value);fd.append('kind',$('mkind').value);
+  if($('mfile').files[0])fd.append('file',$('mfile').files[0]);else if($('mtext').value.trim())fd.append('text',$('mtext').value);
+  else{$('mout').replaceChildren(errP('Choose a file or paste the text.'));return}
+  $('madd').disabled=true;$('mout').replaceChildren(el('p','small','Reading and indexing...'));
+  const r=await api('/api/materials',{method:'POST',body:fd});$('madd').disabled=false;
+  if(!r.ok){$('mout').replaceChildren(errP(r.j.detail||'Could not add this.'));return}
+  $('mout').replaceChildren(el('p','ok',`Added "${r.j.title}": ${r.j.chunks} searchable passages.`));$('mtext').value='';$('mfile').value='';$('mtitle').value='';loadMaterials()};
+$('msearch').onclick=async()=>{const q=$('mq').value.trim();if(!q)return;const r=await api('/api/materials/search?q='+encodeURIComponent(q));const box=$('mres');box.replaceChildren();
+  if(!r.j.length){box.append(el('p','small','No passage found. Try other words, or add notes about this.'));return}
+  r.j.forEach(h=>{const d=el('div','hit');const b=el('b','',h.title);d.append(b,el('div','small',h.text.slice(0,500)));box.append(d)})};
+$('mq').addEventListener('keydown',e=>{if(e.key==='Enter')$('msearch').click()});
+$('chk').onclick=async()=>{const r=await api('/api/selftest');const box=$('chkout');box.replaceChildren();
+  r.j.forEach(c=>{const p=el('p','',(c.ok?'PASS  ':'FAIL  ')+c.name+': '+c.detail);p.className=c.ok?'ok':'bad';box.append(p)})};
+$('chkai').onclick=async()=>{const box=$('chkout');box.replaceChildren(el('p','small','Asking the AI...'));
+  const r=await post('/api/selftest/ai',{});
+  if(r.ok){const p=el('p','ok','PASS  The AI answered: '+r.j.reply);box.replaceChildren(p);return}
+  if(apiCodes.includes(r.j.code)&&r.j.code!=='provider_error'){apiProblem(r,()=>{tab('set');$('chkai').click()});return}
+  const p=el('p','bad','FAIL  '+(r.j.detail||'The AI did not answer.'));box.replaceChildren(p)};
+
+(async()=>{
+  buildSelect();drawUploads();
+  providers=(await api('/api/providers')).j;
+  Object.entries(providers).forEach(([k,p])=>$('prov').add(new Option(p.label,k)));
+  provUI();drawForm();loadHistory();refreshState();
+})();
+</script></body></html>

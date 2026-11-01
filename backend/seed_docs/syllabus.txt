@@ -1,0 +1,44 @@
+UST24E01J Statistical Techniques. SRM Institute of Science and Technology, Faculty of Science and Humanities. Bachelor's Programme, Regulations 2024. Elective course (Minor), L-T-P-C 3-0-3-4. Data book: statistical table and graph sheet.
+Purpose of the course: foundations in biostatistics; organizing data with diagrammatic and graphical presentation; applying statistical techniques to biological problems; correlation and regression in biological sciences; analysing sample data to estimate or predict characteristics of the larger population.
+
+CLO-1 (18 sessions): Descriptive statistics, tabulation and averages.
+Nature and scope of statistical methods, definition of statistics, numerical data, nature of statistics, importance of statistics, functions and limitations of statistics, distrust of statistics, classification, tabulation.
+Types of tables, objective of tabulation, components of a good table, rules of construction of the table, difference between classification and tabulation.
+Diagrammatic representation of statistical data: bar diagram, types of bar diagram, one dimensional diagrams, two dimensional diagrams, pie chart, histogram, frequency polygon, frequency curve, less than ogive, more than ogive, Lorenz curve.
+Measures of central tendency: functions of average, characteristics of a typical average.
+Arithmetic mean for individual series, discrete series and continuous series; merits and demerits.
+Median for individual, discrete and continuous series; merits and demerits.
+Mode for individual, discrete and continuous series; merits and demerits.
+Empirical relation between mean, median and mode; graphical solution of mean, median, mode.
+Practicals: difference between classification and tabulation; ogives, Lorenz curve, arithmetic mean; empirical relation, graphical solution of mean, median, mode.
+
+CLO-2 (18 sessions): Measures of dispersion, skewness and kurtosis.
+Measures of dispersion. Range for individual, discrete and continuous series. Quartile deviation for individual, discrete and continuous series.
+Mean deviation about mean for individual, discrete and continuous series. Mean deviation about median for discrete and continuous series.
+Standard deviation for individual, discrete and continuous series. Coefficient of variation.
+Skewness: Karl Pearson's coefficient of skewness. Bowley's coefficient of skewness. Kurtosis.
+Practicals: range, quartile deviation, mean deviation; standard deviation, coefficient of variation; skewness, Bowley's coefficient of skewness.
+
+CLO-3 (18 sessions): Correlation and regression.
+Correlation analysis: definition and uses, types of correlation, methods for finding the correlation coefficient, properties of the correlation coefficient.
+Karl Pearson's correlation coefficient. Spearman's rank correlation coefficient with non-repeated ranks. Problems on finding the best pair of judgements. Bivariate distribution.
+Regression analysis: definition and uses. Regression coefficients, regression equations, types of regression equations. Regression equation of X on Y and regression equation of Y on X. Relationship between correlation and regression coefficients.
+Finding the corrected correlation coefficient by correcting wrongly entered inputs.
+Practicals: types of correlation and methods of finding the correlation coefficient; regression analysis; regression equation of X on Y and of Y on X.
+
+CLO-4 (18 sessions): Sampling and tests of significance.
+Sampling introduction, types of sampling, purposive sampling. Random sampling and non-random sampling, types of random and non-random samplings.
+Parameter and statistic, sampling distribution, standard error. Test of significance, null hypothesis, alternative hypothesis. Error in sampling, critical region, level of significance, one and two tail tests.
+Procedure for test, test of significance for large samples, sampling of attributes. Test for single samples, test of significance for difference of proportion. Sampling of variables.
+Practicals: types of sampling, purposive, random and non-random sampling; parameter, statistic, sampling distribution, standard error; sampling of variables, test for single samples, test of significance for difference of proportion.
+
+CLO-5 (18 sessions): Small sample tests, chi-square, F-test and ANOVA.
+Testing of hypotheses: testing procedures, definition of the test statistic t and its uses.
+t-test: small sample tests, testing procedure, test for single mean. t-test for two sample means. t test statistic when sample standard deviations are not known.
+Chi-square distribution: definition and uses. Chi-square test and testing procedure. Test based on goodness of fit. Testing the independence of attributes using chi-square.
+F-test: test statistic of F-test, uses and testing procedures. Testing the equality of variance using the F distribution.
+Analysis of variance: definition and uses, testing procedure. ANOVA one way classification.
+Practicals: t-test, test for single mean, test for two sample means; test based on goodness of fit, independence of attributes using chi-square; ANOVA one way classification.
+
+Assessment: Continuous Learning Assessment (CLA) carries 50 percent weightage: CLA-1 10 percent, CLA-2 10 percent, CLA-3 20 percent, CLA-4 10 percent, each with theory and practice parts. The final assessment carries the other 50 percent (theory).
+Resources: Pillai R.S.N. and Bagavathi V. (2009) Statistics Theory and Practice, 7th edition, S. Chand, New Delhi. Khan and Khanum (2008) Fundamentals of Bio Statistics, 3rd edition, Ukaaz Publications, Hyderabad. Gupta S.P. (2012) Statistical Methods, 4th edition, Sultan Chand and Sons, New Delhi. Ken Black (2013) Business Statistics for Contemporary Decision Making, 7th edition, John Wiley.
