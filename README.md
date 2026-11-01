@@ -41,7 +41,7 @@ In the Vercel project's **Settings → Environment Variables**, set the followin
 Keep the database URI and encryption key private. Do not commit them, put them in frontend code, or use Supabase's `service_role` key. If `APP_ENCRYPTION_KEY` is lost or changed, previously saved AI provider keys cannot be decrypted; keep a secure backup.
 
 After setting the variables, redeploy from Vercel. When users sign up, Supabase may require email confirmation before their first sign-in.
-In Vercel, keep **Root Directory** set to the repository root and use the Python framework preset; the FastAPI entry point is explicitly set in `pyproject.toml`.
+Environment variable changes apply only to new deployments. In Vercel, keep **Root Directory** set to the repository root and use the Python framework preset; the FastAPI entry point is explicitly set in `pyproject.toml`.
 
 ### Existing local data
 
