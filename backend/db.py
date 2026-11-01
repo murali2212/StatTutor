@@ -3,7 +3,23 @@ import os
 import re
 import sqlite3
 import threading
+from urllib.parse import quote, unquote
 from uuid import UUID
+
+_DATABASE_URL_CREDENTIALS = re.compile(
+    r"(?P<prefix>postgres(?:ql)?://[^:/@?#]+:)(?P<password>.*)"
+    r"(?P<suffix>@[^/@?#]+(?::\d+)?(?:/[^?#]*)?(?:\?[^#]*)?(?:#.*)?)$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_database_url(conninfo):
+    match = _DATABASE_URL_CREDENTIALS.fullmatch(conninfo)
+    if not match:
+        return conninfo
+    password = quote(unquote(match["password"]), safe="")
+    return f'{match["prefix"]}{password}{match["suffix"]}'
+
 
 DB_PATH = os.environ.get(
     "STATTUTOR_DB",
@@ -11,7 +27,7 @@ DB_PATH = os.environ.get(
 )
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
-SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", "")
+SUPABASE_DB_URL = _normalize_database_url(os.environ.get("SUPABASE_DB_URL", ""))
 APP_ENCRYPTION_KEY = os.environ.get("APP_ENCRYPTION_KEY", "")
 IS_VERCEL = os.environ.get("VERCEL") == "1"
 REQUIRED_SUPABASE_SETTINGS = (

@@ -12,6 +12,16 @@ def test_user_schemas_are_distinct_and_not_user_controlled():
         db.schema_for_user('"; DROP SCHEMA public;--')
 
 
+def test_database_url_escapes_special_characters_in_password():
+    from psycopg.conninfo import conninfo_to_dict
+
+    url = "postgresql://dbuser:p a![]@db.example.com:6543/postgres?sslmode=require"
+    normalized = db._normalize_database_url(url)
+
+    assert "p%20a%21%5B%5D" in normalized
+    assert conninfo_to_dict(normalized)["password"] == "p a![]"
+
+
 def test_local_auth_configuration_is_disabled():
     from fastapi.testclient import TestClient
     from backend.main import app
