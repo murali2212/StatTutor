@@ -101,7 +101,7 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
   <p class="small" id="keyHelp">Paste a free key, tap Test and save, and the tutor starts working.</p>
   <label for="prov">Provider</label><select id="prov"></select>
   <p class="small" id="getkey"></p>
-  <label for="model">Model</label><input id="model" autocomplete="off">
+  <label for="model">Model (selected automatically)</label><input id="model" autocomplete="off" readonly>
   <label for="key">API key</label><input id="key" type="password" autocomplete="off" placeholder="Paste key here">
   <div class="row"><button class="btn" id="save">Test and save</button></div>
   <div id="sout"></div>
@@ -123,17 +123,40 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 const $=id=>document.getElementById(id);
 let pending=null, providers={}, authConfig={}, appInitialized=false;
 const sessionKey='stattutor_session';
-function savedSession(){try{return JSON.parse(sessionStorage.getItem(sessionKey)||'null')}catch(e){return null}}
-function saveSession(value){sessionStorage.setItem(sessionKey,JSON.stringify(value))}
-function clearSession(){sessionStorage.removeItem(sessionKey)}
+function savedSession(){
+  let raw=localStorage.getItem(sessionKey);
+  if(!raw){raw=sessionStorage.getItem(sessionKey);if(raw){localStorage.setItem(sessionKey,raw);sessionStorage.removeItem(sessionKey)}}
+  if(!raw)return null;
+  try{const value=JSON.parse(raw);return value&&typeof value.access_token==='string'?value:null}
+  catch(e){localStorage.removeItem(sessionKey);return null}
+}
+function saveSession(value){localStorage.setItem(sessionKey,JSON.stringify(value));sessionStorage.removeItem(sessionKey)}
+function clearSession(){localStorage.removeItem(sessionKey);sessionStorage.removeItem(sessionKey)}
+function restoreAuthCallback(){
+  const params=new URLSearchParams(location.hash.slice(1));
+  const error=params.get('error_description')||params.get('error');
+  if(error){history.replaceState(null,'',location.pathname+location.search);return error}
+  const access_token=params.get('access_token'),refresh_token=params.get('refresh_token');
+  if(access_token&&refresh_token){
+    saveSession({access_token,refresh_token,token_type:params.get('token_type'),expires_in:params.get('expires_in'),expires_at:params.get('expires_at')});
+    history.replaceState(null,'',location.pathname+location.search);
+  }
+  return '';
+}
 async function api(path,opt={},allowRefresh=true){
   const session=savedSession(),headers={...(opt.headers||{})};
   if(session?.access_token)headers.Authorization='Bearer '+session.access_token;
-  const r=await fetch(path,{...opt,headers});let j={};try{j=await r.json()}catch(e){}
+  let r;
+  try{r=await fetch(path,{...opt,headers})}
+  catch(e){return{ok:false,status:0,j:{detail:'Could not reach StatTutor. Check your connection and try again.'}}}
+  let j={};try{j=await r.json()}catch(e){}
   if(r.status===401&&allowRefresh&&authConfig.auth_enabled&&path!=='/api/auth/refresh'){
     if(session?.refresh_token){
-      const rr=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});
+      let rr;
+      try{rr=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})})}
+      catch(e){return{ok:false,status:0,j:{detail:'Could not refresh your session because StatTutor is temporarily unreachable. Your saved sign-in is kept; try again shortly.'}}}
       if(rr.ok){const renewed=await rr.json();saveSession(renewed);return api(path,opt,false)}
+      if(rr.status>=500||rr.status===429)return{ok:false,status:rr.status,j:{detail:'Supabase is temporarily unavailable. Your saved sign-in is kept; try again shortly.'}}
     }
     clearSession();appInitialized=false;showAuth('Your session expired. Please sign in again.')
   }
@@ -151,8 +174,11 @@ async function startApp(){
   $('logout').hidden= !authConfig.auth_enabled;
   $('keyHelp').textContent=authConfig.auth_enabled?'Your provider key is encrypted and saved to your account.':'Your key stays on this computer.';
   buildSelect();drawUploads();
-  const p=await api('/api/providers');providers=p.j||{};
+  const p=await api('/api/providers');
+  if(!p.ok){appInitialized=false;showAuth(p.j.detail||'Could not load the AI providers. Please try again.');return}
+  providers=p.j||{};
   Object.entries(providers).forEach(([k,v])=>$('prov').add(new Option(v.label,k)));
+  if(!Object.keys(providers).length){appInitialized=false;showAuth('No AI providers are available right now. Please try again later.');return}
   provUI();drawForm();loadHistory();refreshState();
 }
 async function submitAuth(mode){
@@ -213,8 +239,8 @@ async function loadKeys(){
     d.onclick=async()=>{await api('/api/keys/'+k.id,{method:'DELETE'});loadKeys();refreshState()};act.append(d);
     row.append(info,act);box.appendChild(row)});
 }
-function provUI(){const p=providers[$('prov').value];$('model').value=p.default_model;
-  $('getkey').textContent='Get a free key at '+p.get_key}
+function provUI(){const p=providers[$('prov').value];$('model').value=p?.default_model||'';
+  $('getkey').textContent=p?'Get a free key at '+p.get_key:''}
 $('prov').onchange=provUI;
 $('save').onclick=async()=>{
   const key=$('key').value.trim();if(!key){$('sout').innerHTML='<p class="err">Paste your API key first.</p>';return}
@@ -376,8 +402,9 @@ $('chkai').onclick=async()=>{const box=$('chkout');box.replaceChildren(el('p','s
     return;
   }
   if(!authConfig.auth_enabled){await startApp();return}
+  const callbackMessage=restoreAuthCallback();
   const session=savedSession();
-  if(session?.access_token){const check=await api('/api/status');if(check.ok){await startApp();return}clearSession()}
-  showAuth();
+  if(session?.access_token){await startApp();return}
+  showAuth(callbackMessage);
 })();
 </script></body></html>
