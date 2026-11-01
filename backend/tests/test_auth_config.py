@@ -132,6 +132,36 @@ def test_protected_api_requires_a_bearer_token(monkeypatch):
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize(
+    "database_error",
+    [
+        pytest.param("connection", id="connection-error"),
+        pytest.param("connection-string", id="invalid-connection-string"),
+    ],
+)
+def test_database_initialization_error_gives_actionable_response(monkeypatch, database_error):
+    import psycopg
+    from fastapi.testclient import TestClient
+    from backend import auth
+    from backend.main import app
+
+    def fail_initialization(user_id):
+        if database_error == "connection":
+            raise psycopg.OperationalError("private connection details")
+        raise psycopg.ProgrammingError("private connection details")
+
+    monkeypatch.setattr(db, "SUPABASE_ENABLED", True)
+    monkeypatch.setattr(auth, "verify_access_token", lambda token: "user-id")
+    monkeypatch.setattr(db, "initialize_user", fail_initialization)
+
+    response = TestClient(app).get(
+        "/api/providers", headers={"Authorization": "Bearer valid-token"}
+    )
+    assert response.status_code == 503
+    assert "SUPABASE_DB_URL" in response.json()["detail"]
+    assert "private connection details" not in response.text
+
+
 def test_access_token_is_forwarded_to_supabase(monkeypatch):
     from backend import auth
 

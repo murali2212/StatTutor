@@ -39,6 +39,7 @@ In the Vercel project's **Settings → Environment Variables**, set the followin
 | `APP_ENCRYPTION_KEY` | A new Fernet key generated with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 
 Keep the database URI and encryption key private. Do not commit them, put them in frontend code, or use Supabase's `service_role` key. If `APP_ENCRYPTION_KEY` is lost or changed, previously saved AI provider keys cannot be decrypted; keep a secure backup.
+For `SUPABASE_DB_URL`, copy the full **Transaction pooler** connection string from Supabase → **Connect**. Replace its password placeholder with your database password and verify the host is the real pooler hostname, not a placeholder such as `HOST`. The backend URL-encodes special characters in the password.
 
 After setting the variables, redeploy from Vercel. When users sign up, Supabase may require email confirmation before their first sign-in.
 In Supabase → Authentication → URL Configuration, set **Site URL** to `https://stattutor.vercel.app` and add that same URL under **Redirect URLs**. This ensures confirmation links return to the deployed app instead of `localhost:3000`.

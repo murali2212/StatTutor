@@ -1,14 +1,16 @@
-import os, re
+import logging, os, re
 from typing import Optional
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+import psycopg
 from pydantic import BaseModel, Field
 import json
 from starlette.concurrency import run_in_threadpool
 from . import academic, ai, analysis, auth, db, materials, mathengine as me, seed, secret_store
 
 app = FastAPI(title="StatTutor API", version="0.3.0")
+logger = logging.getLogger(__name__)
 if db.SUPABASE_ENABLED:
     secret_store.validate_configuration()
 if not db.SUPABASE_ENABLED and not db.IS_VERCEL:
@@ -42,7 +44,20 @@ async def require_account(request: Request, call_next):
         return JSONResponse(status_code=401, content={"detail": "Please sign in to continue."})
 
     user_id = await run_in_threadpool(auth.verify_access_token, access_token.strip())
-    await run_in_threadpool(db.initialize_user, user_id)
+    try:
+        await run_in_threadpool(db.initialize_user, user_id)
+    except (psycopg.OperationalError, psycopg.ProgrammingError) as exc:
+        logger.error("Supabase database initialization failed (%s).", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "Your sign-in worked, but StatTutor could not connect to its database. "
+                    "In Vercel, update SUPABASE_DB_URL with the Supabase Transaction pooler "
+                    "connection string, including the real database host and password, then redeploy."
+                )
+            },
+        )
     token = db.set_user_id(user_id)
     try:
         return await call_next(request)
