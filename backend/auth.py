@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from . import db
@@ -12,9 +12,30 @@ class Credentials(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class EmailAddress(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class NewPassword(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
+
+
 def _require_supabase():
     if not db.SUPABASE_ENABLED:
         raise HTTPException(404, "Account sign-in is not enabled.")
+
+
+def _auth_response_data(response):
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise HTTPException(502, "Supabase Auth returned an invalid response.") from exc
+    if response.is_error:
+        detail = data.get("msg") or data.get("message") or data.get("error_description")
+        if not detail:
+            detail = "Account request failed."
+        raise HTTPException(response.status_code, str(detail)[:300])
+    return data
 
 
 async def _auth_request(path, body):
@@ -29,16 +50,24 @@ async def _auth_request(path, body):
     except httpx.HTTPError as exc:
         raise HTTPException(503, "Could not reach Supabase Auth. Try again shortly.") from exc
 
+    return _auth_response_data(response)
+
+
+async def _update_password(access_token, password):
+    _require_supabase()
     try:
-        data = response.json()
-    except ValueError as exc:
-        raise HTTPException(502, "Supabase Auth returned an invalid response.") from exc
-    if response.is_error:
-        detail = data.get("msg") or data.get("message") or data.get("error_description")
-        if not detail:
-            detail = "Account request failed."
-        raise HTTPException(response.status_code, str(detail)[:300])
-    return data
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.put(
+                f"{db.SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "apikey": db.SUPABASE_ANON_KEY,
+                    "Authorization": f"Bearer {access_token}",
+                },
+                json={"password": password},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(503, "Could not reach Supabase Auth. Try again shortly.") from exc
+    return _auth_response_data(response)
 
 
 @router.post("/signup")
@@ -49,6 +78,21 @@ async def signup(body: Credentials):
 @router.post("/login")
 async def login(body: Credentials):
     return await _auth_request("token?grant_type=password", body.model_dump())
+
+
+@router.post("/recover")
+async def recover(body: EmailAddress):
+    await _auth_request("recover", body.model_dump())
+    return {"ok": True}
+
+
+@router.put("/password")
+async def update_password(body: NewPassword, authorization: str = Header(default="")):
+    scheme, separator, access_token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not access_token.strip():
+        raise HTTPException(401, "A valid password-reset session is required.")
+    await _update_password(access_token.strip(), body.password)
+    return {"ok": True}
 
 
 @router.post("/refresh")

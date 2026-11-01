@@ -44,10 +44,19 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
   <div class="card">
     <h2 id="authTitle">Your StatTutor account</h2>
     <p class="small">Sign in to keep your study materials, chat, and AI keys private to your account.</p>
-    <label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email">
-    <label for="authPassword">Password</label><input id="authPassword" type="password" minlength="8" autocomplete="current-password">
-    <div class="row"><button class="btn" id="authLogin">Sign in</button><button class="btn ghost" id="authSignup">Create account</button></div>
-    <p class="small" id="authMessage" role="status"></p>
+    <div id="authForm">
+      <label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email">
+      <label for="authPassword">Password</label><input id="authPassword" type="password" minlength="8" autocomplete="current-password">
+      <div class="row"><button class="btn" id="authLogin">Sign in</button><button class="btn ghost" id="authSignup">Create account</button></div>
+      <button class="btn ghost" id="authRecover" type="button">Forgot password?</button>
+      <p class="small" id="authMessage" role="status"></p>
+    </div>
+    <div id="passwordReset" hidden>
+      <p class="small">Enter a new password for your account.</p>
+      <label for="newPassword">New password</label><input id="newPassword" type="password" minlength="8" autocomplete="new-password">
+      <div class="row"><button class="btn" id="savePassword">Update password</button></div>
+      <p class="small" id="resetMessage" role="status"></p>
+    </div>
   </div>
 </main>
 <main id="appMain" hidden>
@@ -123,6 +132,7 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 const $=id=>document.getElementById(id);
 let pending=null, providers={}, authConfig={}, appInitialized=false;
 const sessionKey='stattutor_session';
+const recoveryKey='stattutor_password_recovery';
 let refreshPromise=null;
 function savedSession(){
   let raw=localStorage.getItem(sessionKey);
@@ -148,8 +158,9 @@ async function refreshSession(session){
 function restoreAuthCallback(){
   const params=new URLSearchParams(location.hash.slice(1));
   const error=params.get('error_description')||params.get('error');
-  if(error){history.replaceState(null,'',location.pathname+location.search);return error}
+  if(error){localStorage.removeItem(recoveryKey);history.replaceState(null,'',location.pathname+location.search);return error}
   const access_token=params.get('access_token'),refresh_token=params.get('refresh_token');
+  if(params.get('type')==='recovery')localStorage.setItem(recoveryKey,'true');
   if(access_token&&refresh_token){
     saveSession({access_token,refresh_token,token_type:params.get('token_type'),expires_in:params.get('expires_in'),expires_at:params.get('expires_at')});
     history.replaceState(null,'',location.pathname+location.search);
@@ -205,6 +216,23 @@ async function submitAuth(mode){
 $('authLogin').onclick=()=>submitAuth('login');
 $('authSignup').onclick=()=>submitAuth('signup');
 $('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')$('authLogin').click()});
+$('authRecover').onclick=async()=>{
+  const email=$('authEmail').value.trim();
+  if(!$('authEmail').checkValidity()||!email){$('authEmail').reportValidity();return}
+  $('authMessage').textContent='Sending a password-reset email...';
+  const r=await api('/api/auth/recover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})},false);
+  $('authMessage').textContent=r.ok?'If an account exists for that email, a password-reset link will be sent. Check your inbox.':(r.j.detail||'Could not send the reset email. Try again shortly.');
+};
+$('savePassword').onclick=async()=>{
+  const password=$('newPassword').value;
+  if(password.length<8){$('resetMessage').textContent='Use a password with at least 8 characters.';return}
+  $('savePassword').disabled=true;$('resetMessage').textContent='Updating your password...';
+  const r=await api('/api/auth/password',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})},false);
+  $('savePassword').disabled=false;
+  if(!r.ok){$('resetMessage').textContent=r.j.detail||'Could not update your password. Request a new reset link and try again.';return}
+  localStorage.removeItem(recoveryKey);clearSession();$('newPassword').value='';$('passwordReset').hidden=true;$('authForm').hidden=false;
+  $('authMessage').textContent='Password updated. Sign in with your new password.';
+};
 $('logout').onclick=()=>{clearSession();appInitialized=false;$('chat').replaceChildren();showAuth('You have signed out.')};
 
 function tab(t){document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+t));
@@ -417,6 +445,12 @@ $('chkai').onclick=async()=>{const box=$('chkout');box.replaceChildren(el('p','s
   if(!authConfig.auth_enabled){await startApp();return}
   const callbackMessage=restoreAuthCallback();
   const session=savedSession();
+  if(localStorage.getItem(recoveryKey)==='true'){
+    $('authGate').hidden=false;$('appMain').hidden=true;$('appNav').hidden=true;$('logout').hidden=true;
+    $('authForm').hidden=true;$('passwordReset').hidden=false;
+    if(!session?.access_token)$('resetMessage').textContent='This reset link has expired. Request a new one.';
+    return;
+  }
   if(session?.access_token){await startApp();return}
   showAuth(callbackMessage);
 })();

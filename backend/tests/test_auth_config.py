@@ -27,6 +27,59 @@ def test_local_auth_configuration_is_disabled():
     }
 
 
+def test_password_recovery_forwards_email_to_supabase(monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend import auth
+    from backend.main import app
+
+    calls = {}
+
+    async def fake_auth_request(path, body):
+        calls.update(path=path, body=body)
+        return {}
+
+    monkeypatch.setattr(db, "SUPABASE_ENABLED", True)
+    monkeypatch.setattr(auth, "_auth_request", fake_auth_request)
+    response = TestClient(app).post(
+        "/api/auth/recover", json={"email": "student@example.com"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert calls == {"path": "recover", "body": {"email": "student@example.com"}}
+
+
+def test_password_update_requires_and_uses_bearer_session(monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend import auth
+    from backend.main import app
+
+    calls = {}
+
+    async def fake_update_password(access_token, password):
+        calls.update(access_token=access_token, password=password)
+        return {}
+
+    monkeypatch.setattr(db, "SUPABASE_ENABLED", True)
+    monkeypatch.setattr(auth, "_update_password", fake_update_password)
+    client = TestClient(app)
+    unauthorized = client.put(
+        "/api/auth/password", json={"password": "new-password-123"}
+    )
+    assert unauthorized.status_code == 401
+
+    response = client.put(
+        "/api/auth/password",
+        headers={"Authorization": "Bearer recovery-token"},
+        json={"password": "new-password-123"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert calls == {
+        "access_token": "recovery-token",
+        "password": "new-password-123",
+    }
+
+
 def test_openai_compatible_provider_sends_user_key(monkeypatch):
     from backend import ai
 

@@ -42,6 +42,7 @@ Keep the database URI and encryption key private. Do not commit them, put them i
 
 After setting the variables, redeploy from Vercel. When users sign up, Supabase may require email confirmation before their first sign-in.
 In Supabase → Authentication → URL Configuration, set **Site URL** to `https://stattutor.vercel.app` and add that same URL under **Redirect URLs**. This ensures confirmation links return to the deployed app instead of `localhost:3000`.
+If a student cannot sign in, use **Forgot password?** on the sign-in form. The reset email returns to StatTutor, where the student can set a new password.
 Environment variable changes apply only to new deployments. In Vercel, keep **Root Directory** set to the repository root and use the Python framework preset; the FastAPI entry point is explicitly set in `pyproject.toml`.
 
 ### Existing local data
