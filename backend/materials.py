@@ -1,5 +1,4 @@
-"""Study materials: upload notes/textbooks, split into chunks, search with SQLite FTS5
-(BM25 ranking, works offline, no extra packages). Material text is untrusted data."""
+"""Study materials: chunking and full-text search for SQLite and Supabase Postgres."""
 import re
 from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -38,21 +37,31 @@ def add_material(title, kind, text):
     if not parts:
         raise ValueError("No readable text found in this material.")
     with db.conn() as c:
-        mid = c.execute("INSERT INTO materials(title, kind, chars) VALUES (?,?,?)", (title[:200], kind, len(text))).lastrowid
+        mid = c.execute("INSERT INTO materials(title, kind, chars) VALUES (?,?,?) RETURNING id", (title[:200], kind, len(text))).fetchone()["id"]
         for i, t in enumerate(parts):
-            cid = c.execute("INSERT INTO chunks(material_id, position, text) VALUES (?,?,?)", (mid, i, t)).lastrowid
-            c.execute("INSERT INTO chunk_fts(text, chunk_id, material_id) VALUES (?,?,?)", (t, cid, mid))
+            cid = c.execute("INSERT INTO chunks(material_id, position, text) VALUES (?,?,?) RETURNING id", (mid, i, t)).fetchone()["id"]
+            if not db.SUPABASE_ENABLED:
+                c.execute("INSERT INTO chunk_fts(text, chunk_id, material_id) VALUES (?,?,?)", (t, cid, mid))
     return mid, len(parts)
 
 def search(query, k=4):
     toks = [t for t in re.findall(r"[A-Za-z0-9']+", query.lower()) if len(t) > 1 and t not in STOP][:12]
     if not toks:
         return []
-    q = " OR ".join('"' + t.replace('"', "") + '"' for t in toks)
     with db.conn() as c:
-        rows = c.execute("""SELECT f.chunk_id, f.material_id, m.title, k.text, bm25(chunk_fts) AS score
-                            FROM chunk_fts f JOIN chunks k ON k.id = f.chunk_id JOIN materials m ON m.id = f.material_id
-                            WHERE chunk_fts MATCH ? ORDER BY score LIMIT ?""", (q, k)).fetchall()
+        if db.SUPABASE_ENABLED:
+            query = " ".join(toks)
+            rows = c.execute("""SELECT k.id AS chunk_id, m.id AS material_id, m.title, k.text,
+                                       ts_rank(to_tsvector('english', k.text),
+                                               plainto_tsquery('english', ?)) AS score
+                                FROM chunks k JOIN materials m ON m.id = k.material_id
+                                WHERE to_tsvector('english', k.text) @@ plainto_tsquery('english', ?)
+                                ORDER BY score DESC LIMIT ?""", (query, query, k)).fetchall()
+        else:
+            q = " OR ".join('"' + t.replace('"', "") + '"' for t in toks)
+            rows = c.execute("""SELECT f.chunk_id, f.material_id, m.title, k.text, bm25(chunk_fts) AS score
+                                FROM chunk_fts f JOIN chunks k ON k.id = f.chunk_id JOIN materials m ON m.id = f.material_id
+                                WHERE chunk_fts MATCH ? ORDER BY score LIMIT ?""", (q, k)).fetchall()
     return [{"chunk_id": r["chunk_id"], "material_id": r["material_id"], "title": r["title"], "text": r["text"]} for r in rows]
 
 @router.post("/materials")
@@ -89,7 +98,8 @@ def list_materials():
 @router.delete("/materials/{mid}")
 def delete_material(mid: int):
     with db.conn() as c:
-        c.execute("DELETE FROM chunk_fts WHERE material_id = ?", (mid,))
+        if not db.SUPABASE_ENABLED:
+            c.execute("DELETE FROM chunk_fts WHERE material_id = ?", (mid,))
         c.execute("DELETE FROM materials WHERE id = ?", (mid,))
     return {"ok": True}
 

@@ -1,21 +1,48 @@
-# StatTutor: your Statistics tutor (UST24E01J)
+# StatTutor
 
-## Start it (Windows)
-1. Install Python from python.org (tick "Add Python to PATH").
-2. Unzip this folder, then double-click **start.bat**. Mac/Linux: run `./start.sh`.
-3. Your browser opens at http://localhost:8000. Keep the black window open while you use the app.
+StatTutor is a statistics tutor built with FastAPI. It can run locally with SQLite or deploy to Vercel with Supabase Auth and Postgres.
 
-## Test it live (about 5 minutes)
-1. **Key tab > Run system check.** Everything should say PASS except "API key ready".
-2. Get a free key (Gemini: https://aistudio.google.com/apikey, Groq: https://console.groq.com/keys). In the **Key** tab paste it and press **Test and save**, then **Test the AI now**.
-3. **Tutor tab.** Ask: `Teach me quartile deviation from zero`. The answer should be in small steps and end with a "From your materials" line naming your CT-2 paper or syllabus.
-4. Say `I don't understand`. It must teach the same idea a different way, not repeat itself.
-5. **Calc tab > Quartile deviation.** The answer must match what the tutor showed (Q1 = 28, Q3 = 45, QD = 8.5).
-6. **Notes tab.** Add a few lines of your own notes, then ask the tutor about them. It should cite your note.
-7. **Exam tab.** Check the pattern, then press **Teach me this** on any topic.
-8. To see the limit message: delete your key in the Key tab and send a question. The Key page opens by itself.
+## Run locally (Windows)
 
-## Run the automated tests
-    python -m pytest backend/tests -q
+1. Install Python 3.11 or newer.
+2. Double-click `start.bat`.
+3. Open [http://localhost:8000](http://localhost:8000). Local development uses SQLite and does not require an account.
 
-Your data is one file: `data/stattutor.db`. Copy it to back up. Your API keys are stored only in that file.
+Run the automated tests with:
+
+```powershell
+python -m pytest backend/tests -q
+```
+
+## Deploy to Vercel with Supabase
+
+The Vercel entry point is configured explicitly as `backend.main:app` in `pyproject.toml`, so Vercel does not have to guess between the application and its test modules.
+
+### 1. Prepare Supabase
+
+1. In the Supabase project, enable **Authentication → Providers → Email**.
+2. In **Project Settings → API**, copy the project URL and the **publishable/anon key**. The publishable key is intended for browser use; never use a `service_role` or secret API key here.
+3. In **Project Settings → Database → Connection string**, choose the **Transaction pooler** and copy its URI. Set a strong database password if Supabase asks for one. The connection string is a server-side secret.
+4. In **Authentication → URL Configuration**, set the Site URL to your Vercel domain and add that domain to the allowed redirect URLs.
+
+Each Supabase account receives a separate Postgres schema. The backend validates each access token with Supabase Auth before opening that account's schema. API keys saved in StatTutor are encrypted with `APP_ENCRYPTION_KEY`.
+
+### 2. Configure Vercel environment variables
+
+In the Vercel project's **Settings → Environment Variables**, set the following for Production (and Preview if needed):
+
+| Variable | Value |
+|---|---|
+| `SUPABASE_URL` | `https://uhhvtubbevwgdtnuyprb.supabase.co` |
+| `SUPABASE_ANON_KEY` | Supabase publishable/anon key |
+| `SUPABASE_DB_URL` | Supabase **Transaction pooler** URI, including `sslmode=require` |
+| `APP_ENCRYPTION_KEY` | A new Fernet key generated with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+
+Keep the database URI and encryption key private. Do not commit them, put them in frontend code, or use Supabase's `service_role` key. If `APP_ENCRYPTION_KEY` is lost or changed, previously saved AI provider keys cannot be decrypted; keep a secure backup.
+
+After setting the variables, redeploy from Vercel. When users sign up, Supabase may require email confirmation before their first sign-in.
+In Vercel, keep **Root Directory** set to the repository root and use the Python framework preset; the FastAPI entry point is explicitly set in `pyproject.toml`.
+
+### Existing local data
+
+The local `data/stattutor.db` is deliberately excluded from Git and is not copied to Supabase. It may contain API keys and chat history. Each Supabase account starts with a fresh copy of the bundled syllabus and question papers, and private notes, chat, and provider keys are saved separately for that account.

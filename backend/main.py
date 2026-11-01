@@ -1,18 +1,42 @@
 import os, re
 from typing import Optional
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import json
-from . import academic, ai, analysis, db, materials, mathengine as me, seed
+from starlette.concurrency import run_in_threadpool
+from . import academic, ai, analysis, auth, db, materials, mathengine as me, seed, secret_store
 
 app = FastAPI(title="StatTutor API", version="0.3.0")
-db.init()
-seed.seed_if_empty()
-seed.seed_materials()
+if db.SUPABASE_ENABLED:
+    secret_store.validate_configuration()
+if not db.SUPABASE_ENABLED:
+    db.init()
+    seed.seed_if_empty()
+    seed.seed_materials()
+app.include_router(auth.router)
 app.include_router(academic.router)
 app.include_router(materials.router)
+
+@app.middleware("http")
+async def require_account(request: Request, call_next):
+    path = request.url.path
+    if not db.SUPABASE_ENABLED or not path.startswith("/api/") or path.startswith("/api/auth/"):
+        return await call_next(request)
+
+    authorization = request.headers.get("authorization", "")
+    scheme, separator, access_token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not access_token.strip():
+        return JSONResponse(status_code=401, content={"detail": "Please sign in to continue."})
+
+    user_id = await run_in_threadpool(auth.verify_access_token, access_token.strip())
+    await run_in_threadpool(db.initialize_user, user_id)
+    token = db.set_user_id(user_id)
+    try:
+        return await call_next(request)
+    finally:
+        db.reset_user_id(token)
 
 @app.exception_handler(ai.NoKey)
 async def _nokey(request, exc):
@@ -128,7 +152,7 @@ def list_keys():
     with db.conn() as c:
         rows = c.execute("SELECT * FROM api_keys ORDER BY id").fetchall()
     return [{"id": r["id"], "provider": r["provider"], "model": r["model"],
-             "status": r["status"], "key": mask(r["api_key"])} for r in rows]
+             "status": r["status"], "key": mask(secret_store.decrypt_api_key(r["api_key"]))} for r in rows]
 
 @app.post("/api/keys")
 def add_key(body: KeyIn):
@@ -145,9 +169,10 @@ def add_key(body: KeyIn):
                "quota": "This key is valid but its free limit is already used up. Try again later or use another key."}.get(e.kind, f"Could not connect: {e}")
         raise HTTPException(400, msg)
     with db.conn() as c:
-        cur = c.execute("INSERT INTO api_keys(provider, model, api_key) VALUES (?,?,?)",
-                        (body.provider, model, key))
-    return {"id": cur.lastrowid, "provider": body.provider, "model": model, "status": "active"}
+        cur = c.execute("INSERT INTO api_keys(provider, model, api_key) VALUES (?,?,?) RETURNING id",
+                        (body.provider, model, secret_store.encrypt_api_key(key)))
+        key_id = cur.fetchone()["id"]
+    return {"id": key_id, "provider": body.provider, "model": model, "status": "active"}
 
 @app.delete("/api/keys/{key_id}")
 def delete_key(key_id: int):

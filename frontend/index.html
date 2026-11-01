@@ -6,6 +6,7 @@
 :root{--bg:#f4f6f3;--card:#fff;--ink:#1b2a2f;--mute:#5d6b70;--line:#d9dfdc;--acc:#1d6b57;--acc2:#e8f1ed;--warn:#fff3d6;--warnl:#e0b84a;--err:#a6362b}
 @media(prefers-color-scheme:dark){:root{--bg:#10181a;--card:#182225;--ink:#e6eeea;--mute:#93a3a0;--line:#2b3a3d;--acc:#4fb597;--acc2:#1c3029;--warn:#3a3118;--warnl:#8a7326;--err:#ff8a7a}}
 *{box-sizing:border-box}html,body{height:100%;margin:0}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
 h1,h2{font-family:Georgia,"Iowan Old Style",serif;margin:0}
 header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
@@ -38,8 +39,18 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 .src{font-size:13px;color:var(--mute);margin-top:6px}.ok{color:var(--acc)}.bad{color:var(--err)}.hit{border-top:1px solid var(--line);padding:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}.step{margin:6px 0}.tw{overflow-x:auto;margin:8px 0}table{border-collapse:collapse;font-size:14px;min-width:100%}th,td{border:1px solid var(--line);padding:4px 8px;text-align:right;white-space:nowrap}th{background:var(--acc2)}
 .steps li{margin:4px 0}.small{font-size:14px;color:var(--mute)}
 </style></head><body>
-<header><h1>StatTutor</h1><span class="small" id="keystate"></span></header>
-<main>
+<header><h1>StatTutor</h1><span class="small" id="keystate"></span><button class="btn ghost" id="logout" hidden>Sign out</button></header>
+<main id="authGate" hidden>
+  <div class="card">
+    <h2 id="authTitle">Your StatTutor account</h2>
+    <p class="small">Sign in to keep your study materials, chat, and AI keys private to your account.</p>
+    <label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email">
+    <label for="authPassword">Password</label><input id="authPassword" type="password" minlength="8" autocomplete="current-password">
+    <div class="row"><button class="btn" id="authLogin">Sign in</button><button class="btn ghost" id="authSignup">Create account</button></div>
+    <p class="small" id="authMessage" role="status"></p>
+  </div>
+</main>
+<main id="appMain" hidden>
 <div class="banner" id="banner" role="alert"><b id="bannerTitle"></b><span id="bannerText"></span>
   <div class="row"><button class="btn" id="bannerBtn">Add new API key</button></div></div>
 
@@ -87,7 +98,7 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 <section class="panel" id="p-set">
   <h2>API connection</h2>
   <div class="banner" id="setnote" role="alert"></div>
-  <p class="small">Paste a free key, tap Test and save, and the tutor starts working. Your key stays on this computer.</p>
+  <p class="small" id="keyHelp">Paste a free key, tap Test and save, and the tutor starts working.</p>
   <label for="prov">Provider</label><select id="prov"></select>
   <p class="small" id="getkey"></p>
   <label for="model">Model</label><input id="model" autocomplete="off">
@@ -100,7 +111,7 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
   <p class="small">If a key hits its free limit, the next one is used automatically.</p></div>
 </section>
 </main>
-<nav role="tablist">
+<nav id="appNav" role="tablist" hidden>
   <button role="tab" data-t="tutor" aria-selected="true">Tutor</button>
   <button role="tab" data-t="papers" aria-selected="false">Papers</button>
   <button role="tab" data-t="analysis" aria-selected="false">Exam</button>
@@ -110,9 +121,52 @@ label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 </nav>
 <script>
 const $=id=>document.getElementById(id);
-let pending=null, providers={};
-async function api(path,opt){const r=await fetch(path,opt);let j={};try{j=await r.json()}catch(e){}return{ok:r.ok,status:r.status,j}}
+let pending=null, providers={}, authConfig={}, appInitialized=false;
+const sessionKey='stattutor_session';
+function savedSession(){try{return JSON.parse(sessionStorage.getItem(sessionKey)||'null')}catch(e){return null}}
+function saveSession(value){sessionStorage.setItem(sessionKey,JSON.stringify(value))}
+function clearSession(){sessionStorage.removeItem(sessionKey)}
+async function api(path,opt={},allowRefresh=true){
+  const session=savedSession(),headers={...(opt.headers||{})};
+  if(session?.access_token)headers.Authorization='Bearer '+session.access_token;
+  const r=await fetch(path,{...opt,headers});let j={};try{j=await r.json()}catch(e){}
+  if(r.status===401&&allowRefresh&&authConfig.auth_enabled&&path!=='/api/auth/refresh'){
+    if(session?.refresh_token){
+      const rr=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});
+      if(rr.ok){const renewed=await rr.json();saveSession(renewed);return api(path,opt,false)}
+    }
+    clearSession();appInitialized=false;showAuth('Your session expired. Please sign in again.')
+  }
+  return{ok:r.ok,status:r.status,j}
+}
 const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+
+function showAuth(message=''){
+  $('authGate').hidden=false;$('appMain').hidden=true;$('appNav').hidden=true;$('logout').hidden=true;
+  $('authMessage').textContent=message;
+}
+async function startApp(){
+  if(appInitialized)return;appInitialized=true;
+  $('authGate').hidden=true;$('appMain').hidden=false;$('appNav').hidden=false;
+  $('logout').hidden= !authConfig.auth_enabled;
+  $('keyHelp').textContent=authConfig.auth_enabled?'Your provider key is encrypted and saved to your account.':'Your key stays on this computer.';
+  buildSelect();drawUploads();
+  const p=await api('/api/providers');providers=p.j||{};
+  Object.entries(providers).forEach(([k,v])=>$('prov').add(new Option(v.label,k)));
+  provUI();drawForm();loadHistory();refreshState();
+}
+async function submitAuth(mode){
+  const message=$('authMessage');message.textContent=mode==='signup'?'Creating your account...':'Signing in...';
+  const email=$('authEmail').value.trim(),password=$('authPassword').value;
+  const r=await api('/api/auth/'+mode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})},false);
+  if(!r.ok){message.textContent=r.j.detail||r.j.msg||'Account request failed.';return}
+  if(r.j.access_token){saveSession(r.j);await startApp();return}
+  message.textContent='Check your email to confirm your account, then sign in.';
+}
+$('authLogin').onclick=()=>submitAuth('login');
+$('authSignup').onclick=()=>submitAuth('signup');
+$('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')$('authLogin').click()});
+$('logout').onclick=()=>{clearSession();appInitialized=false;$('chat').replaceChildren();showAuth('You have signed out.')};
 
 function tab(t){document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+t));
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
@@ -313,9 +367,11 @@ $('chkai').onclick=async()=>{const box=$('chkout');box.replaceChildren(el('p','s
   const p=el('p','bad','FAIL  '+(r.j.detail||'The AI did not answer.'));box.replaceChildren(p)};
 
 (async()=>{
-  buildSelect();drawUploads();
-  providers=(await api('/api/providers')).j;
-  Object.entries(providers).forEach(([k,p])=>$('prov').add(new Option(p.label,k)));
-  provUI();drawForm();loadHistory();refreshState();
+  const r=await api('/api/auth/config',{},false);
+  authConfig=r.j||{};
+  if(!authConfig.auth_enabled){await startApp();return}
+  const session=savedSession();
+  if(session?.access_token){const check=await api('/api/status');if(check.ok){await startApp();return}clearSession()}
+  showAuth();
 })();
 </script></body></html>

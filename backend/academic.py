@@ -98,8 +98,9 @@ async def upload(kind: str = Form(...), text: Optional[str] = Form(None), file: 
         raise HTTPException(400, "Choose a file or paste the text.")
     with db.conn() as c:
         c.execute("DELETE FROM documents WHERE kind=?", (kind,))
-        cur = c.execute("INSERT INTO documents(kind, filename, text) VALUES (?,?,?)", (kind, name, body))
-    return {"id": cur.lastrowid, "kind": kind, "filename": name, "chars": len(body),
+        cur = c.execute("INSERT INTO documents(kind, filename, text) VALUES (?,?,?) RETURNING id", (kind, name, body))
+        doc_id = cur.fetchone()["id"]
+    return {"id": doc_id, "kind": kind, "filename": name, "chars": len(body),
             "truncated": len(body) > MAX_CHARS, "preview": body[:500]}
 
 @router.post("/documents/{doc_id}/extract")
@@ -121,7 +122,7 @@ def extract(doc_id: int):
             c.execute("UPDATE questions SET topic_id=NULL")
             c.execute("DELETE FROM topics"); c.execute("DELETE FROM units")
             for i, u in enumerate(units):
-                uid = c.execute("INSERT INTO units(name, position) VALUES (?,?)", (u["name"], i)).lastrowid
+                uid = c.execute("INSERT INTO units(name, position) VALUES (?,?) RETURNING id", (u["name"], i)).fetchone()["id"]
                 for j, t in enumerate(u["topics"]):
                     c.execute("INSERT INTO topics(unit_id, name, position) VALUES (?,?,?)", (uid, t, j))
         return {"units": len(units), "topics": sum(len(u["topics"]) for u in units)}
@@ -179,7 +180,7 @@ def add_topic(uid: int, b: Name):
         if not c.execute("SELECT 1 FROM units WHERE id=?", (uid,)).fetchone():
             raise HTTPException(404, "Unit not found.")
         pos = c.execute("SELECT COALESCE(MAX(position),-1)+1 FROM topics WHERE unit_id=?", (uid,)).fetchone()[0]
-        tid = c.execute("INSERT INTO topics(unit_id, name, position) VALUES (?,?,?)", (uid, b.name.strip()[:200], pos)).lastrowid
+        tid = c.execute("INSERT INTO topics(unit_id, name, position) VALUES (?,?,?) RETURNING id", (uid, b.name.strip()[:200], pos)).fetchone()["id"]
     return {"id": tid}
 
 @router.delete("/units/{uid}")

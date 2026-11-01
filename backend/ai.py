@@ -1,8 +1,9 @@
-"""Provider layer: Gemini, Groq, OpenRouter. Keys live in SQLite, never in code.
+"""Provider layer: Gemini, Groq, OpenRouter. Provider keys are stored per account.
 When a key's quota is used up the next active key is tried; when none is left
 AllKeysExhausted is raised so the UI can ask for a new key."""
 import httpx
-from . import db
+
+from . import db, secret_store
 
 PROVIDERS = {
     "gemini": {"label": "Google Gemini", "default_model": "gemini-2.5-flash",
@@ -18,16 +19,20 @@ OPENAI_STYLE = {
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
 }
 
+
 class ProviderError(Exception):
     def __init__(self, kind, msg):
         super().__init__(msg)
-        self.kind = kind          # quota | invalid | other
+        self.kind = kind
+
 
 class AllKeysExhausted(Exception):
     pass
 
+
 class NoKey(Exception):
     pass
+
 
 def _classify(status, text):
     t = text.lower()
@@ -36,6 +41,7 @@ def _classify(status, text):
     if status in (401, 403) or "api key not valid" in t or "invalid api key" in t:
         return "invalid"
     return "other"
+
 
 def call_provider(provider, model, key, messages, timeout=60):
     """messages: [{role: system|user|assistant, content: str}] -> reply text."""
@@ -52,9 +58,12 @@ def call_provider(provider, model, key, messages, timeout=60):
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                 headers={"x-goog-api-key": key}, json=body, timeout=timeout)
         elif provider in OPENAI_STYLE:
-            r = httpx.post(OPENAI_STYLE[provider],
-                           headers={"Authorization": f"Bearer {key}"},
-                           json={"model": model, "messages": messages}, timeout=timeout)
+            r = httpx.post(
+                OPENAI_STYLE[provider],
+                headers={"Authorization": "Bearer " + key},
+                json={"model": model, "messages": messages},
+                timeout=timeout,
+            )
         else:
             raise ProviderError("other", f"Unknown provider: {provider}")
     except httpx.HTTPError as e:
@@ -69,6 +78,7 @@ def call_provider(provider, model, key, messages, timeout=60):
     except (KeyError, IndexError, TypeError):
         raise ProviderError("other", "Unexpected response from provider.")
 
+
 def complete(messages):
     """Try each active key in order; mark dead ones; raise when none works."""
     with db.conn() as c:
@@ -79,7 +89,8 @@ def complete(messages):
         if k["status"] != "active":
             continue
         try:
-            return call_provider(k["provider"], k["model"], k["api_key"], messages)
+            key = secret_store.decrypt_api_key(k["api_key"])
+            return call_provider(k["provider"], k["model"], key, messages)
         except ProviderError as e:
             if e.kind in ("quota", "invalid"):
                 new = "exhausted" if e.kind == "quota" else "invalid"

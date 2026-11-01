@@ -77,11 +77,13 @@ def seed_if_empty():
             return False
         ids = {}
         for i, (unit, topics) in enumerate(SYLLABUS):
-            uid = c.execute("INSERT INTO units(name, position) VALUES (?,?)", (unit, i)).lastrowid
+            uid = c.execute("INSERT INTO units(name, position) VALUES (?,?) RETURNING id", (unit, i)).fetchone()["id"]
             for j, t in enumerate(topics):
-                ids[t] = c.execute("INSERT INTO topics(unit_id, name, position) VALUES (?,?,?)", (uid, t, j)).lastrowid
+                ids[t] = c.execute("INSERT INTO topics(unit_id, name, position) VALUES (?,?,?) RETURNING id", (uid, t, j)).fetchone()["id"]
         for paper, (mx, note) in PAPER_META.items():
-            c.execute("INSERT OR REPLACE INTO paper_meta(paper, max_marks, note) VALUES (?,?,?)", (paper, mx, note))
+            c.execute("""INSERT INTO paper_meta(paper, max_marks, note) VALUES (?,?,?)
+                         ON CONFLICT(paper) DO UPDATE SET max_marks=excluded.max_marks, note=excluded.note""",
+                      (paper, mx, note))
         if not c.execute("SELECT COUNT(*) FROM questions").fetchone()[0]:
             for paper, num, text, marks, qt, topic, alt in QUESTIONS:
                 c.execute("INSERT INTO questions(paper, number, text, marks, qtype, topic_id, alt) VALUES (?,?,?,?,?,?,?)",
